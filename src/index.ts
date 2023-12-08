@@ -111,8 +111,18 @@ export default Canister({
     }),
 
     // Close a flash loan
-    closeFlashLoan: update([text], Result(AssetPayload, Error), (id) => {
-        // Implementation of closeFlashLoan function
+    closeFlashLoan: update([text], Result(FlashLoan, Error), (id) => {
+        const currentFlashLoan = flashLoanStorage.get(id);
+        if (currentFlashLoan) {
+            const updatedFlashLoan = {
+                ...currentFlashLoan,
+                status: 'closed',
+            };
+            flashLoanStorage.insert(id, updatedFlashLoan);
+            return Ok(updatedFlashLoan);
+        } else {
+            return Err({ NotFound: `Flash Loan not found with id=${id}` });
+        }
     }),
 
     // Get an asset by ID
