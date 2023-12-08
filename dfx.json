@@ -1,0 +1,13 @@
+{
+    "canisters": {
+        "flash-loan": {
+            "type": "custom",
+            "main": "src/index.ts",
+            "candid": "src/index.did",
+            "build": "npx azle flash-loan",
+            "wasm": ".azle/flash-loan/flash-loan.wasm",
+            "gzip": true
+        }
+    }
+}
+
