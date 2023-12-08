@@ -6,8 +6,6 @@ import {
     Record,
     StableBTreeMap,
     Ok,
-    None,
-    Some,
     Err,
     Vec,
     Result,
