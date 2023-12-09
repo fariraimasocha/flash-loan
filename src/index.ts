@@ -254,6 +254,24 @@ export default Canister({
     return Ok(transaction);
   }),
 
+  //update loan application
+  updateLoanApplication: update(
+    [Principal, float64, text],
+    Result(text, text),
+    (id, amount, operation) => {
+      if (!currentCustomer) {
+        return Err('Login please to perform this operation.');
+      }
+      const transaction = transactionStorage.get(id);
+      if (!transaction) {
+        return Err('Transaction does not exist.');
+      }
+      transaction.amount = amount;
+      transaction.operation = operation;
+      return Ok(`Loan application ${transaction.id} updated successfully.`);
+    }
+  ),
+
 
 //authenticate a customer
   authenticateCustomer: update(
@@ -284,6 +302,7 @@ export default Canister({
   }),
 
 
+  //get authenticated
   getAuthenticatedCustomer: query([], Result(text, text), () => {
     if (!currentCustomer) {
       return Err('There is no logged in customer.');
@@ -325,8 +344,25 @@ export default Canister({
   }),
 
   //update a customer
+  updateCustomer: update(
+    [Principal, text, text, float64],
+    Result(text, text),
+    (id, username, password, amount) => {
+      if (!currentCustomer) {
+        return Err('Login please to perform this operation.');
+      }
+      const customer = customerStorage.get(id);
+      if (!customer) {
+        return Err('Customer does not exist.');
+      }
+      customer.username = username;
+      customer.password = password;
+      customer.amount = amount;
+      return Ok(`Customer ${customer.username} updated successfully.`);
+    }
+  ),
+  
 
- 
 });
 
 function generateId(): Principal {
