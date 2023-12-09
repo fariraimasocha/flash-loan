@@ -66,7 +66,7 @@ export default Canister({
     return Ok(`Your loan balance is ${currentCustomer.amount}`);
   }),
 
-  //TRANSACTIONS
+  //get loan applications
   getLoanApplications: query([], Result(Vec(LoanApplication), text), () => {
     if (!currentCustomer) {
       return Err('Login please to perform this operation.');
@@ -175,8 +175,39 @@ export default Canister({
     }
   ),
 
+  //loan calculator
+  loanCalculator: query([float64, nat64], Result(float64, text), (amount, time) => {
+    if (!currentCustomer) {
+      return Err('Login please to perform this operation.');
+    }
+    const interest = 0.1;
+    const totalAmount = amount * (1 + interest) ** Number(time);
+    return Ok(totalAmount);
+  }),
 
-  //CUSTOMER
+  //loan tracking
+  loanTracking: query([Principal], Result(LoanApplication, text), (id) => {
+    if (!currentCustomer) {
+      return Err('Login please to perform this operation.');
+    }
+    const transaction = transactionStorage.get(id);
+    if (!transaction) {
+      return Err('Transaction does not exist.');
+    }
+    return Ok(transaction);
+  }),
+
+  //credit score monitoring
+  creditScoreMonitoring: query([], Result(nat8, text), () => {
+    if (!currentCustomer) {
+      return Err('Login please to perform this operation.');
+    }
+    const creditScore = Math.floor(Math.random() * 100);
+    return Ok(creditScore);
+  }),
+
+
+  //Ccreate new customer
   createCustomer: update(
     [text, text, float64],
     Result(text, text),
@@ -188,11 +219,14 @@ export default Canister({
         return Err('Customer already exists.');
       }
       const newCustomer: typeof Customer = {
-        id: generateId(),
+        id: ic.caller(),
         username,
         password,
         amount,
       };
+
+      console.log(newCustomer.id);
+
       customerStorage.insert(newCustomer.id, newCustomer);
       LoanerStorage.totalDeposit += newCustomer.amount;
       return Ok(`Customer ${newCustomer.username} added successfully.`);
