@@ -255,8 +255,7 @@ export default Canister({
   }),
 
 
-
-
+//authenticate a customer
   authenticateCustomer: update(
     [text, text],
     Result(text, text),
@@ -275,7 +274,7 @@ export default Canister({
     }
   ),
 
-  //Function to Sig out
+  //Function to Signout
   signOut: update([], Result(text, text), () => {
     if (!currentCustomer) {
       return Err('There is no logged in customer.');
@@ -283,6 +282,7 @@ export default Canister({
     currentCustomer = null;
     return Ok('Logged out.');
   }),
+
 
   getAuthenticatedCustomer: query([], Result(text, text), () => {
     if (!currentCustomer) {
