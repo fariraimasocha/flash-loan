@@ -273,8 +273,8 @@ export default Canister({
     return Ok(customerStorage.values());
   }),
 
-  //view specific customer
-  
+ 
+
 
  
 });
