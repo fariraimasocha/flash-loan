@@ -152,6 +152,7 @@ export default Canister({
     }
   ),
 
+
   //delete loan application
   deleteLoanApplication: update(
     [Principal],
@@ -233,6 +234,29 @@ export default Canister({
     }
   ),
 
+  //get all loan applications
+  getAllLoanApplications: query([], Result(Vec(LoanApplication), text), () => {
+    if (!currentCustomer) {
+      return Err('Login please to perform this operation.');
+    }
+    return Ok(transactionStorage.values());
+  }),
+
+  //get specific loan application
+  getSpecificLoanApplication: query([Principal], Result(LoanApplication, text), (id) => {
+    if (!currentCustomer) {
+      return Err('Login please to perform this operation.');
+    }
+    const transaction = transactionStorage.get(id);
+    if (!transaction) {
+      return Err('Transaction does not exist.');
+    }
+    return Ok(transaction);
+  }),
+
+
+
+
   authenticateCustomer: update(
     [text, text],
     Result(text, text),
@@ -250,6 +274,8 @@ export default Canister({
       return Ok('Logged in');
     }
   ),
+
+  //Function to Sig out
   signOut: update([], Result(text, text), () => {
     if (!currentCustomer) {
       return Err('There is no logged in customer.');
@@ -272,6 +298,8 @@ export default Canister({
     }
     return Ok(customerStorage.values());
   }),
+
+  //view specific customer
 
 
  
