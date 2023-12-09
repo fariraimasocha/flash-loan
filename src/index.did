@@ -1,0 +1,13 @@
+service: () -> {
+    approveLoanApplication: (principal) -> (variant {Ok:text; Err:text});
+    authenticateCustomer: (text, text) -> (variant {Ok:text; Err:text});
+    createCustomer: (text, text, float64) -> (variant {Ok:text; Err:text});
+    createLoanApplication: (float64, text) -> (variant {Ok:text; Err:text});
+    deleteLoanApplication: (principal) -> (variant {Ok:text; Err:text});
+    getAuthenticatedCustomer: () -> (variant {Ok:text; Err:text}) query;
+    getBalance: () -> (variant {Ok:text; Err:text}) query;
+    getLoanApplications: () -> (variant {Ok:vec record {id:principal; operation:text; timestamp:nat64; customerID:principal; amount:float64}; Err:text}) query;
+    getLoanerDetails: () -> (variant {Ok:record {totalDeposit:float64; transactions:vec record {id:principal; operation:text; timestamp:nat64; customerID:principal; amount:float64}; customers:vec record {id:principal; username:text; password:text; amount:float64}}; Err:text}) query;
+    rejectLoanApplication: (principal) -> (variant {Ok:text; Err:text});
+    signOut: () -> (variant {Ok:text; Err:text});
+}

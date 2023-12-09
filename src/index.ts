@@ -1,170 +1,257 @@
 import {
-    query,
-    update,
-    Canister,
-    text,
-    Record,
-    StableBTreeMap,
-    Ok,
-    Err,
-    Vec,
-    Result,
-    nat64,
-    ic,
-    Opt,
-    Variant,
+  Canister,
+  query,
+  text,
+  update,
+  Void,
+  Record,
+  float64,
+  Vec,
+  nat64,
+  StableBTreeMap,
+  nat8,
+  Principal,
+  Err,
+  Ok,
+  Result,
+  ic,
 } from 'azle';
 
-import { v4 as uuidv4 } from 'uuid';
-
-const FlashLoan = Record({
-    id: text,
-    borrower: text,
-    lender: text,
-    amount: nat64,
-    startTime: nat64,
-    endTime: nat64,
-    status: text,
+// Loan applicatiom Record
+const LoanApplication = Record({
+  id: Principal,
+  amount: float64,
+  timestamp: nat64,
+  customerID: Principal,
+  operation: text,
 });
 
-const FlashLoanPayload = Record({
-    borrower: text,
-    lender: text,
-    amount: nat64,
-    startTime: nat64,
-    endTime: nat64,
+//Customer Record
+const Customer = Record({
+  id: Principal,
+  username: text,
+  password: text,
+  amount: float64,
 });
 
-const Asset = Record({
-    id: text,
-    amount: nat64,
-    startTime: nat64,
-    endTime: nat64,
-    startTimeDiff: nat64,
-    endTimeDiff: nat64,
-    blockTime: nat64,
+
+//Loaner Record
+const Loaner = Record({
+  totalDeposit: float64,
+  transactions: Vec(LoanApplication),
+  customers: Vec(Customer),
 });
 
-const AssetPayload = Record({
-    borrower: text,
-    lender: text,
-    amount: nat64,
-    startTime: nat64,
-    endTime: nat64,
-    startTimeDiff: nat64,
-    endTimeDiff: nat64,
-    blockTime: nat64,
-});
+//Loaner St
+const LoanerStorage: typeof Loaner = {
+  totalDeposit: 0,
+  transactions: [],
+  customers: [],
+};
 
-const Error = Variant({
-    NotFound: text,
-    InvalidPayload: text,
-});
+const customerStorage = StableBTreeMap(Principal, Customer, 1);
 
-const flashLoanStorage = StableBTreeMap(text, FlashLoan, 0);
-const assetStorage = StableBTreeMap(text, Asset, 0);
+const transactionStorage = StableBTreeMap(Principal, LoanApplication, 2);
+
+let currentCustomer: typeof Customer | null;
 
 export default Canister({
-    // Create a new flash loan
-    createFlashLoan: update([FlashLoanPayload], Result(FlashLoan, Error), (payload) => {
-        const flashLoan = {
-            id: uuidv4(),
-            borrower: payload.borrower,
-            lender: payload.lender,
-            amount: payload.amount,
-            startTime: payload.startTime,
-            endTime: payload.endTime,
-            status: 'active',
-            startTimeDiff: ic.time(),
-            endTimeDiff: ic.time(),
-        };
-        flashLoanStorage.insert(flashLoan.id, flashLoan);
-        return Ok(flashLoan);
-    }),
+  getLoanerDetails: query([], Result(Loaner, text), () => {
+    return Ok(LoanerStorage);
+  }),
+  getBalance: query([], Result(text, text), () => {
+    if (!currentCustomer) {
+      return Err('There is no logged in customer');
+    }
+    return Ok(`Your loan balance is ${currentCustomer.amount}`);
+  }),
 
-    // Get a flash loan by id
-    getFlashLoan: query([text], Opt(FlashLoan), (id) => {
-        return flashLoanStorage.get(id);
-    }),
-    
+  //TRANSACTIONS
+  getLoanApplications: query([], Result(Vec(LoanApplication), text), () => {
+    if (!currentCustomer) {
+      return Err('Login please to perform this operation.');
+    }
+    const transactions = transactionStorage.values();
+    const customerTransactions = transactions.filter(
+      (transaction: typeof LoanApplication) =>
+        transaction.customerID === currentCustomer!.id
+    );
+    return Ok(customerTransactions);
+  }),
+ 
+  
+  //create loan applications
+  createLoanApplication: update(
+    [float64, text],
+    Result(text, text),
+    (amount, operation) => {
+      if (!currentCustomer) {
+        return Err('Login please to perform this operation.');
+      }
+      if (currentCustomer.amount < amount) {
+        return Err('Insufficient funds.');
+      }
+      const newTransaction: typeof LoanApplication = {
+        id: generateId(),
+        amount,
+        timestamp: ic.time(),
+        customerID: currentCustomer.id,
+        operation,
+      };
+      transactionStorage.insert(newTransaction.id, newTransaction);
+      currentCustomer.amount -= amount;
+      LoanerStorage.totalDeposit += amount;
+      return Ok(`Loan application ${newTransaction.id} added successfully.`);
+    }
+  ),
 
-    // Get all flash loans
-    getAllFlashLoans: query([], Vec(FlashLoan), () => {
-        return flashLoanStorage.values();
-    }),
+  //approve loan application
+  approveLoanApplication: update(
+    [Principal],
+    Result(text, text),
+    (transactionId) => {
+      if (!currentCustomer) {
+        return Err('Login please to perform this operation.');
+      }
+      const transaction = transactionStorage.get(transactionId);
+      if (!transaction) {
+        return Err('Transaction does not exist.');
+      }
+      const customer = customerStorage.get(transaction.customerID);
+      if (!customer) {
+        return Err('Customer does not exist.');
+      }
+      if (LoanerStorage.totalDeposit < transaction.amount) {
+        return Err('Insufficient funds.');
+      }
+      customer.amount += transaction.amount;
+      LoanerStorage.totalDeposit -= transaction.amount;
+      return Ok(`Loan application ${transaction.id} approved successfully.`);
+    }
+  ),
 
-    // Update a flash loan by ID
-    updateFlashLoan: update([text, FlashLoanPayload], Result(FlashLoan, Error), (id, payload) => {
-        const currentFlashLoan = flashLoanStorage.get(id);
-        if (currentFlashLoan) {
-            const updatedFlashLoan = {
-                ...currentFlashLoan,
-                ...payload,
-            };
-            flashLoanStorage.insert(id, updatedFlashLoan);
-            return Ok(updatedFlashLoan);
-        } else {
-            return Err({ NotFound: `Flash Loan not found with id=${id}` });
-        }
-    }),
+  //reject loan application
+  rejectLoanApplication: update(
+    [Principal],
+    Result(text, text),
+    (transactionId) => {
+      if (!currentCustomer) {
+        return Err('Login please to perform this operation.');
+      }
+      const transaction = transactionStorage.get(transactionId);
+      if (!transaction) {
+        return Err('Transaction does not exist.');
+      }
+      const customer = customerStorage.get(transaction.customerID);
+      if (!customer) {
+        return Err('Customer does not exist.');
+      }
+      customer.amount += transaction.amount;
+      LoanerStorage.totalDeposit -= transaction.amount;
+      return Ok(`Loan application ${transaction.id} rejected successfully.`);
+    }
+  ),
 
-    // Close a flash loan
-    closeFlashLoan: update([text], Result(FlashLoan, Error), (id) => {
-        const currentFlashLoan = flashLoanStorage.get(id);
-        if (currentFlashLoan) {
-            const updatedFlashLoan = {
-                ...currentFlashLoan,
-                status: 'closed',
-            };
-            flashLoanStorage.insert(id, updatedFlashLoan);
-            return Ok(updatedFlashLoan);
-        } else {
-            return Err({ NotFound: `Flash Loan not found with id=${id}` });
-        }
-    }),
+  //delete loan application
+  deleteLoanApplication: update(
+    [Principal],
+    Result(text, text),
+    (transactionId) => {
+      if (!currentCustomer) {
+        return Err('Login please to perform this operation.');
+      }
+      const transaction = transactionStorage.get(transactionId);
+      if (!transaction) {
+        return Err('Transaction does not exist.');
+      }
+      const customer = customerStorage.get(transaction.customerID);
+      if (!customer) {
+        return Err('Customer does not exist.');
+      }
+      customer.amount += transaction.amount;
+      LoanerStorage.totalDeposit -= transaction.amount;
+      transactionStorage.delete(transactionId);
+      return Ok(`Loan application ${transaction.id} deleted successfully.`);
+    }
+  ),
 
-    // Get an asset by ID
-    getAsset: query([text], Opt(Asset), (id) => {
-        return assetStorage.get(id);
-    }),
 
-    // Get all assets
-    getAllAssets: query([], Vec(Asset), () => {
-        return assetStorage.values();
-    }),
+  //CUSTOMER
+  createCustomer: update(
+    [text, text, float64],
+    Result(text, text),
+    (username, password, amount) => {
+      const customer = customerStorage
+        .values()
+        .filter((c: typeof Customer) => c.username === username)[0];
+      if (customer) {
+        return Err('Customer already exists.');
+      }
+      const newCustomer: typeof Customer = {
+        id: generateId(),
+        username,
+        password,
+        amount,
+      };
+      customerStorage.insert(newCustomer.id, newCustomer);
+      LoanerStorage.totalDeposit += newCustomer.amount;
+      return Ok(`Customer ${newCustomer.username} added successfully.`);
+    }
+  ),
 
-    // Update an asset by ID
-    updateAsset: update([text, AssetPayload], Result(Asset, Error), (id, payload) => {
-        const currentAsset = assetStorage.get(id);
-        if (currentAsset) {
-            const updatedAsset = {
-                ...currentAsset,
-                ...payload,
-            };
-            assetStorage.insert(id, updatedAsset);
-            return Ok(updatedAsset);
-        } else {
-            return Err({ NotFound: `Asset not found with id=${id}` });
-        }
-    }),
+  authenticateCustomer: update(
+    [text, text],
+    Result(text, text),
+    (username, password) => {
+      const customer = customerStorage
+        .values()
+        .filter((c: typeof Customer) => c.username === username)[0];
+      if (!customer) {
+        return Err('Customer does not exist.');
+      }
+      if (customer.password !== password) {
+        return Err('Customer with provided credentials does not exist.');
+      }
+      currentCustomer = customer;
+      return Ok('Logged in');
+    }
+  ),
+  signOut: update([], Result(text, text), () => {
+    if (!currentCustomer) {
+      return Err('There is no logged in customer.');
+    }
+    currentCustomer = null;
+    return Ok('Logged out.');
+  }),
 
-    // Delete an asset by ID
-    deleteAsset: update([text], Result(Asset, Error), (id) => {
-        const deletedAsset = assetStorage.remove(id);
-        if ('None' in deletedAsset) {
-            return Err({ NotFound: `Couldn't delete the asset with id=${id}. Error 404 asset not found.` });
-        }
-        return Ok(deletedAsset.Some);
-    }),
+  getAuthenticatedCustomer: query([], Result(text, text), () => {
+    if (!currentCustomer) {
+      return Err('There is no logged in customer.');
+    }
+    return Ok(currentCustomer.username);
+  }),
+
+ 
 });
 
- globalThis.crypto = {
-    // @ts-ignore
-    getRandomValues: () => {
-      let array = new Uint8Array(32);
-      for (let i = 0; i < array.length; i++) {
-        array[i] = Math.floor(Math.random() * 256);
-      }
-      return array;
-    },
-  };
+function generateId(): Principal {
+  const randomBytes = new Array(29)
+    .fill(0)
+    .map((_) => Math.floor(Math.random() * 256));
+
+  return Principal.fromUint8Array(Uint8Array.from(randomBytes));
+}
+
+
+globalThis.crypto = {
+  // @ts-ignore
+  getRandomValues: () => {
+    let array = new Uint8Array(32);
+
+    for (let i = 0; i < array.length; i++) {
+      array[i] = Math.floor(Math.random() * 256);
+    }
+
+    return array;
+  },
+};
