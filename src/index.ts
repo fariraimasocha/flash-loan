@@ -300,7 +300,31 @@ export default Canister({
   }),
 
   //view specific customer
+  viewSpecificCustomer: query([Principal], Result(Customer, text), (id) => {
+    if (!currentCustomer) {
+      return Err('Login please to perform this operation.');
+    }
+    const customer = customerStorage.get(id);
+    if (!customer) {
+      return Err('Customer does not exist.');
+    }
+    return Ok(customer);
+  }),
 
+  //delete a customer
+  deleteCustomer: update([Principal], Result(text, text), (id) => {
+    if (!currentCustomer) {
+      return Err('Login please to perform this operation.');
+    }
+    const customer = customerStorage.get(id);
+    if (!customer) {
+      return Err('Customer does not exist.');
+    }
+    customerStorage.delete(id);
+    return Ok(`Customer ${customer.username} deleted successfully.`);
+  }),
+
+  //update a customer
 
  
 });
