@@ -265,6 +265,17 @@ export default Canister({
     return Ok(currentCustomer.username);
   }),
 
+  //view all customers
+  viewAllCustomers: query([], Result(Vec(Customer), text), () => {
+    if (!currentCustomer) {
+      return Err('Login please to perform this operation.');
+    }
+    return Ok(customerStorage.values());
+  }),
+
+  //view specific customer
+  
+
  
 });
 
